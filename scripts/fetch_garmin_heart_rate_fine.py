@@ -196,10 +196,12 @@ def heart_rate_average(samples: Sequence[Tuple[str, int]]) -> Optional[float]:
 
 
 def normalize_wellness_samples(
-    heart_rate_values: Iterable[Sequence[object]],
+    heart_rate_values: Optional[Iterable[Sequence[object]]],
     tz: ZoneInfo,
 ) -> List[Tuple[str, int]]:
     normalized: List[Tuple[str, int]] = []
+    if heart_rate_values is None:
+        return normalized
     for item in heart_rate_values:
         if not isinstance(item, Sequence) or len(item) < 2:
             continue
