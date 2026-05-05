@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.user.garmin-heart-rate-fetch</string>
+
+    <key>WorkingDirectory</key>
+    <string>__PROJECT_ROOT__</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>__PROJECT_ROOT__/.venv/bin/python</string>
+      <string>__PROJECT_ROOT__/scripts/fetch_garmin_heart_rate.py</string>
+      <string>--days</string>
+      <string>1</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>GARMIN_EMAIL</key>
+      <string>your_email@example.com</string>
+      <key>GARMIN_PASSWORD</key>
+      <string>your_password</string>
+      <key>GARMIN_TOKENS_DIR</key>
+      <string>/Users/your-user/.garminconnect</string>
+      <key>GARMIN_TIMEZONE</key>
+      <string>Asia/Seoul</string>
+    </dict>
+
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
+    <key>StandardOutPath</key>
+    <string>__PROJECT_ROOT__/reports/launchd.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__PROJECT_ROOT__/reports/launchd.stderr.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+  </dict>
+</plist>
