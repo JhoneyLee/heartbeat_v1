@@ -4,11 +4,17 @@ Garmin Connect 앱의 심박수 데이터를 주기적으로 가져와서 로컬
 
 이 저장소는 개인 계정 기준으로 가장 현실적인 방법인 비공식 `python-garminconnect` 라이브러리를 사용합니다. Garmin의 공식 Garmin Connect Developer Program은 현재도 존재하지만 승인된 비즈니스 개발자 대상으로 안내되고 있어, 개인 자동화에는 바로 쓰기 어렵습니다.
 
+## 바로 보기
+
+- 메인 대시보드: `reports/heart_rate_dashboard.html`
+- 대시보드 데이터: `reports/dashboard_data/dashboard_data.js`
+- 활동별 고해상도 데이터: `reports/dashboard_data/activities/`
+
 ## 포함된 것
 
 - `scripts/fetch_garmin_heart_rate.py`: Garmin Connect에서 날짜별 심박수 데이터를 가져와 raw JSON과 SQLite로 저장
 - `scripts/fetch_garmin_heart_rate_fine.py`: 웰니스 심박수와 활동 원본 FIT를 함께 가져와 가능한 가장 촘촘한 심박수 샘플까지 저장
-- `scripts/analyze_heart_rate.py`: 저장된 데이터를 CSV, 텍스트 요약, PNG 차트로 분석
+- `scripts/analyze_heart_rate.py`: 저장된 데이터를 CSV, 텍스트 요약, PNG 차트, Chart.js 대시보드로 분석
 - `launchd/com.user.garmin-heart-rate-fetch.plist.example`: macOS `launchd` 주기 실행 예시
 - `.env.example`: 로컬 환경변수 예시
 
@@ -22,7 +28,7 @@ Garmin Connect 앱의 심박수 데이터를 주기적으로 가져와서 로컬
 ## 1. 환경 준비
 
 ```bash
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
@@ -73,12 +79,31 @@ source .venv/bin/activate
 python scripts/analyze_heart_rate.py
 ```
 
+대시보드를 바로 열고 싶으면:
+
+```bash
+open reports/heart_rate_dashboard.html
+```
+
 생성 결과:
 
+- `reports/heart_rate_dashboard.html`
+- `reports/dashboard_data/dashboard_data.js`
+- `reports/dashboard_data/activities/`
 - `reports/heart_rate_daily_summary.csv`
 - `reports/heart_rate_summary.txt`
 - `reports/heart_rate_trend.png`
 - `reports/heart_rate_hourly_profile.png`
+
+대시보드 기능:
+
+- 기본 기간: 최근 28일
+- 기간 직접 선택 및 `28일 / 90일 / YTD / All` 프리셋
+- `Daily / Weekly / Monthly` 추세 전환
+- 시간대별 심박수 프로필
+- 활동 타입 필터
+- 활동별 고해상도 심박수 차트와 스파이크 표시
+- `running` 활동 고해상도 심박수의 날짜별 대표 평균/최대 추세
 
 ## 4. macOS에서 주기 실행
 
