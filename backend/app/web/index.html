@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Garmin Event-Aware Dashboard</title>
+    <link rel="stylesheet" href="/app-static/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Local Server Prototype</p>
+          <h1>Garmin Event-Aware Dashboard</h1>
+          <p class="subcopy">
+            심박수, 스트레스, 수면 데이터를 로컬 API로 확인하고 이후 이벤트/인사이트 레이어를 붙이기 위한
+            테스트 UI입니다.
+          </p>
+        </div>
+        <div class="actions">
+          <button id="sync-button" type="button">지금 갱신</button>
+        </div>
+      </header>
+
+      <section class="controls card">
+        <label>
+          Start
+          <input id="start-date" type="date" />
+        </label>
+        <label>
+          End
+          <input id="end-date" type="date" />
+        </label>
+        <button id="load-button" type="button">불러오기</button>
+      </section>
+
+      <section class="kpi-grid">
+        <article class="kpi card">
+          <span>Avg Resting HR</span>
+          <strong id="kpi-resting">-</strong>
+        </article>
+        <article class="kpi card">
+          <span>Avg Daily HR</span>
+          <strong id="kpi-daily-hr">-</strong>
+        </article>
+        <article class="kpi card">
+          <span>Avg Stress</span>
+          <strong id="kpi-stress">-</strong>
+        </article>
+        <article class="kpi card">
+          <span>Avg Sleep</span>
+          <strong id="kpi-sleep">-</strong>
+        </article>
+      </section>
+
+      <section class="chart-grid">
+        <article class="card chart-card wide">
+          <div class="card-header">
+            <h2>Daily Heart Rate</h2>
+            <p>resting / average / max</p>
+          </div>
+          <canvas id="heart-rate-chart"></canvas>
+        </article>
+
+        <article class="card chart-card">
+          <div class="card-header">
+            <h2>Stress Trend</h2>
+            <p>average / max stress</p>
+          </div>
+          <canvas id="stress-chart"></canvas>
+        </article>
+
+        <article class="card chart-card">
+          <div class="card-header">
+            <h2>Sleep Trend</h2>
+            <p>duration / score</p>
+          </div>
+          <canvas id="sleep-chart"></canvas>
+        </article>
+
+        <article class="card chart-card wide">
+          <div class="card-header">
+            <h2>Hourly Heart Rate Profile</h2>
+            <p>selected range average by hour</p>
+          </div>
+          <canvas id="hourly-chart"></canvas>
+        </article>
+      </section>
+
+      <section class="activity-section card">
+        <div class="card-header">
+          <div>
+            <h2>Activity Detail</h2>
+            <p>활동별 고해상도 심박수</p>
+          </div>
+          <label class="activity-select">
+            <span>Activity</span>
+            <select id="activity-select"></select>
+          </label>
+        </div>
+        <canvas id="activity-chart"></canvas>
+      </section>
+
+      <section class="status-grid">
+        <article class="card">
+          <h2>Sync Status</h2>
+          <pre id="sync-status">아직 실행 기록이 없습니다.</pre>
+        </article>
+        <article class="card">
+          <h2>Prototype Notes</h2>
+          <ul>
+            <li>현재는 로컬 SQLite와 기존 Garmin 수집 스크립트를 그대로 사용합니다.</li>
+            <li>이벤트, 이상치, 변화 지점, 인사이트 레이어는 다음 단계에서 추가됩니다.</li>
+            <li>정식 Garmin OAuth/API로 가면 provider 계층만 교체하는 구조입니다.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+
+    <script src="/app-static/app.js"></script>
+  </body>
+</html>

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Garmin Heart Rate Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="./dashboard_data/dashboard_data.js?v=20260505151517"></script>
+    <script src="./dashboard_data/dashboard_data.js?v=20260505194053"></script>
     <style>
       :root {
         --bg: #f3efe6;
@@ -349,6 +349,13 @@
         return new Date(`${value}T00:00:00`);
       }
 
+      function formatDateInputValue(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+
       function formatNumber(value) {
         return value == null || Number.isNaN(value) ? "n/a" : Number(value).toFixed(2);
       }
@@ -574,8 +581,8 @@
           start = new Date(latest);
           start.setDate(start.getDate() - (Number(days) - 1));
         }
-        startInput.value = start.toISOString().slice(0, 10);
-        endInput.value = latest.toISOString().slice(0, 10);
+        startInput.value = formatDateInputValue(start);
+        endInput.value = formatDateInputValue(latest);
         renderRange();
       }
 

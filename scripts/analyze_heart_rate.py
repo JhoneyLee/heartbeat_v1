@@ -710,6 +710,13 @@ def write_html_dashboard(asset_version: str) -> None:
         return new Date(`${value}T00:00:00`);
       }
 
+      function formatDateInputValue(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+
       function formatNumber(value) {
         return value == null || Number.isNaN(value) ? "n/a" : Number(value).toFixed(2);
       }
@@ -935,8 +942,8 @@ def write_html_dashboard(asset_version: str) -> None:
           start = new Date(latest);
           start.setDate(start.getDate() - (Number(days) - 1));
         }
-        startInput.value = start.toISOString().slice(0, 10);
-        endInput.value = latest.toISOString().slice(0, 10);
+        startInput.value = formatDateInputValue(start);
+        endInput.value = formatDateInputValue(latest);
         renderRange();
       }
 

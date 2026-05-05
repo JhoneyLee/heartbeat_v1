@@ -32,6 +32,8 @@ except ImportError:
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 RAW_HEART_RATE_DIR = ROOT_DIR / "data" / "raw" / "heart_rate"
+RAW_STRESS_DIR = ROOT_DIR / "data" / "raw" / "stress"
+RAW_SLEEP_DIR = ROOT_DIR / "data" / "raw" / "sleep"
 RAW_ACTIVITY_DIR = ROOT_DIR / "data" / "raw" / "activities"
 DB_PATH = ROOT_DIR / "data" / "processed" / "garmin_heart_rate.sqlite3"
 
@@ -58,6 +60,16 @@ def parse_args() -> argparse.Namespace:
         "--skip-activities",
         action="store_true",
         help="Skip activity FIT downloads and only fetch the daily wellness heart rate endpoint.",
+    )
+    parser.add_argument(
+        "--skip-stress",
+        action="store_true",
+        help="Skip Garmin daily stress data.",
+    )
+    parser.add_argument(
+        "--skip-sleep",
+        action="store_true",
+        help="Skip Garmin daily sleep data.",
     )
     return parser.parse_args()
 
@@ -160,6 +172,68 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS daily_stress_summary (
+            calendar_date TEXT PRIMARY KEY,
+            average_stress_level REAL,
+            max_stress_level INTEGER,
+            sample_count INTEGER NOT NULL,
+            body_battery_sample_count INTEGER NOT NULL,
+            raw_file TEXT NOT NULL,
+            fetched_at_utc TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS stress_samples (
+            calendar_date TEXT NOT NULL,
+            timestamp_utc TEXT NOT NULL,
+            timestamp_local TEXT NOT NULL,
+            stress_level INTEGER,
+            body_battery_level INTEGER,
+            body_battery_state TEXT,
+            raw_file TEXT NOT NULL,
+            PRIMARY KEY (timestamp_utc)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS daily_sleep_summary (
+            sleep_date TEXT PRIMARY KEY,
+            sleep_start_local TEXT,
+            sleep_end_local TEXT,
+            total_sleep_seconds INTEGER,
+            deep_sleep_seconds INTEGER,
+            light_sleep_seconds INTEGER,
+            rem_sleep_seconds INTEGER,
+            awake_sleep_seconds INTEGER,
+            average_sleep_stress REAL,
+            average_sleep_heart_rate REAL,
+            resting_heart_rate INTEGER,
+            sleep_score INTEGER,
+            raw_file TEXT NOT NULL,
+            fetched_at_utc TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sleep_stage_segments (
+            sleep_date TEXT NOT NULL,
+            segment_index INTEGER NOT NULL,
+            start_utc TEXT NOT NULL,
+            end_utc TEXT NOT NULL,
+            start_local TEXT NOT NULL,
+            end_local TEXT NOT NULL,
+            activity_level REAL,
+            raw_file TEXT NOT NULL,
+            PRIMARY KEY (sleep_date, segment_index)
+        )
+        """
+    )
     columns = {
         row[1]
         for row in conn.execute("PRAGMA table_info(heart_rate_samples)").fetchall()
@@ -193,6 +267,25 @@ def heart_rate_average(samples: Sequence[Tuple[str, int]]) -> Optional[float]:
     if not samples:
         return None
     return round(sum(bpm for _, bpm in samples) / len(samples), 2)
+
+
+def iso_utc_to_local_iso(timestamp_iso: str, tz: ZoneInfo) -> str:
+    timestamp = datetime.fromisoformat(timestamp_iso)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    else:
+        timestamp = timestamp.astimezone(timezone.utc)
+    return timestamp.astimezone(tz).isoformat()
+
+
+def timestamp_ms_to_utc_local_iso(timestamp_ms: object, tz: ZoneInfo) -> Optional[Tuple[str, str]]:
+    try:
+        timestamp_seconds = float(timestamp_ms) / 1000
+    except (TypeError, ValueError):
+        return None
+    timestamp_utc = datetime.fromtimestamp(timestamp_seconds, tz=timezone.utc)
+    timestamp_local = timestamp_utc.astimezone(tz)
+    return timestamp_utc.isoformat(), timestamp_local.isoformat()
 
 
 def normalize_wellness_samples(
@@ -232,6 +325,16 @@ def raw_heart_rate_file_path(fetch_date: date) -> Path:
 def save_wellness_json(payload: dict, fetch_date: date) -> Path:
     RAW_HEART_RATE_DIR.mkdir(parents=True, exist_ok=True)
     target = raw_heart_rate_file_path(fetch_date)
+    target.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return target
+
+
+def save_raw_json(payload: dict, fetch_date: date, target_dir: Path) -> Path:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{fetch_date.isoformat()}.json"
     target.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -322,6 +425,294 @@ def fetch_wellness_for_dates(
             f"[wellness] saved {date_text} samples={len(samples)} "
             f"resting={safe_int(payload.get('restingHeartRate'))} "
             f"max={safe_int(payload.get('maxHeartRate'))}"
+        )
+
+
+def normalize_stress_samples(
+    stress_values: Optional[Iterable[Sequence[object]]],
+    body_battery_values: Optional[Iterable[Sequence[object]]],
+    tz: ZoneInfo,
+) -> List[Tuple[str, str, Optional[int], Optional[int], Optional[str]]]:
+    merged: dict[str, Tuple[str, str, Optional[int], Optional[int], Optional[str]]] = {}
+
+    if stress_values is not None:
+        for item in stress_values:
+            if not isinstance(item, Sequence) or len(item) < 2:
+                continue
+            converted = timestamp_ms_to_utc_local_iso(item[0], tz)
+            if converted is None:
+                continue
+            timestamp_utc, timestamp_local = converted
+            stress_level = safe_int(item[1])
+            merged[timestamp_utc] = (
+                timestamp_utc,
+                timestamp_local,
+                stress_level,
+                None,
+                None,
+            )
+
+    if body_battery_values is not None:
+        for item in body_battery_values:
+            if not isinstance(item, Sequence) or len(item) < 3:
+                continue
+            converted = timestamp_ms_to_utc_local_iso(item[0], tz)
+            if converted is None:
+                continue
+            timestamp_utc, timestamp_local = converted
+            existing = merged.get(timestamp_utc, (timestamp_utc, timestamp_local, None, None, None))
+            body_battery_state = str(item[1]) if item[1] is not None else None
+            body_battery_level = safe_int(item[2])
+            merged[timestamp_utc] = (
+                existing[0],
+                existing[1],
+                existing[2],
+                body_battery_level,
+                body_battery_state,
+            )
+
+    return [merged[key] for key in sorted(merged.keys())]
+
+
+def upsert_stress_day(
+    conn: sqlite3.Connection,
+    fetch_date: date,
+    raw_path: Path,
+    payload: dict,
+    samples: Sequence[Tuple[str, str, Optional[int], Optional[int], Optional[str]]],
+) -> None:
+    fetched_at_utc = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "DELETE FROM stress_samples WHERE calendar_date = ?",
+        (fetch_date.isoformat(),),
+    )
+    conn.executemany(
+        """
+        INSERT OR REPLACE INTO stress_samples (
+            calendar_date,
+            timestamp_utc,
+            timestamp_local,
+            stress_level,
+            body_battery_level,
+            body_battery_state,
+            raw_file
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                fetch_date.isoformat(),
+                timestamp_utc,
+                timestamp_local,
+                stress_level,
+                body_battery_level,
+                body_battery_state,
+                str(raw_path),
+            )
+            for timestamp_utc, timestamp_local, stress_level, body_battery_level, body_battery_state in samples
+        ],
+    )
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO daily_stress_summary (
+            calendar_date,
+            average_stress_level,
+            max_stress_level,
+            sample_count,
+            body_battery_sample_count,
+            raw_file,
+            fetched_at_utc
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            fetch_date.isoformat(),
+            safe_float(payload.get("avgStressLevel")),
+            safe_int(payload.get("maxStressLevel")),
+            len([sample for sample in samples if sample[2] is not None]),
+            len([sample for sample in samples if sample[3] is not None]),
+            str(raw_path),
+            fetched_at_utc,
+        ),
+    )
+    conn.commit()
+
+
+def fetch_stress_for_dates(
+    client: Garmin,
+    conn: sqlite3.Connection,
+    fetch_dates: Sequence[date],
+    tz: ZoneInfo,
+) -> None:
+    for fetch_date in fetch_dates:
+        date_text = fetch_date.isoformat()
+        print(f"[stress] fetch {date_text}")
+        payload = client.get_stress_data(date_text)
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"Unexpected Garmin stress payload for {date_text}: {type(payload)}")
+
+        samples = normalize_stress_samples(
+            payload.get("stressValuesArray"),
+            payload.get("bodyBatteryValuesArray"),
+            tz,
+        )
+        raw_path = save_raw_json(payload, fetch_date, RAW_STRESS_DIR)
+        upsert_stress_day(conn, fetch_date, raw_path, payload, samples)
+        print(
+            f"[stress] saved {date_text} samples={len(samples)} "
+            f"avg={safe_float(payload.get('avgStressLevel'))} "
+            f"max={safe_int(payload.get('maxStressLevel'))}"
+        )
+
+
+def normalize_sleep_segments(
+    sleep_levels: Optional[Iterable[dict]],
+    sleep_date: date,
+    raw_path: Path,
+    tz: ZoneInfo,
+) -> List[Tuple[str, int, str, str, str, str, Optional[float], str]]:
+    rows: List[Tuple[str, int, str, str, str, str, Optional[float], str]] = []
+    if sleep_levels is None:
+        return rows
+
+    for index, segment in enumerate(sleep_levels):
+        if not isinstance(segment, dict):
+            continue
+        start_gmt = segment.get("startGMT")
+        end_gmt = segment.get("endGMT")
+        if not isinstance(start_gmt, str) or not isinstance(end_gmt, str):
+            continue
+        start_utc = datetime.fromisoformat(start_gmt.replace(".0", "") + "+00:00")
+        end_utc = datetime.fromisoformat(end_gmt.replace(".0", "") + "+00:00")
+        rows.append(
+            (
+                sleep_date.isoformat(),
+                index,
+                start_utc.isoformat(),
+                end_utc.isoformat(),
+                start_utc.astimezone(tz).isoformat(),
+                end_utc.astimezone(tz).isoformat(),
+                safe_float(segment.get("activityLevel")),
+                str(raw_path),
+            )
+        )
+    return rows
+
+
+def upsert_sleep_day(
+    conn: sqlite3.Connection,
+    fetch_date: date,
+    raw_path: Path,
+    payload: dict,
+    segments: Sequence[Tuple[str, int, str, str, str, str, Optional[float], str]],
+    tz: ZoneInfo,
+) -> None:
+    dto = payload.get("dailySleepDTO") or {}
+    if not isinstance(dto, dict):
+        dto = {}
+    sleep_date = str(dto.get("calendarDate") or fetch_date.isoformat())
+    fetched_at_utc = datetime.now(timezone.utc).isoformat()
+
+    sleep_start_local = None
+    if dto.get("sleepStartTimestampGMT") is not None:
+        converted = timestamp_ms_to_utc_local_iso(dto.get("sleepStartTimestampGMT"), tz)
+        sleep_start_local = converted[1] if converted else None
+
+    sleep_end_local = None
+    if dto.get("sleepEndTimestampGMT") is not None:
+        converted = timestamp_ms_to_utc_local_iso(dto.get("sleepEndTimestampGMT"), tz)
+        sleep_end_local = converted[1] if converted else None
+
+    sleep_scores = dto.get("sleepScores") or {}
+    overall_score = None
+    if isinstance(sleep_scores, dict):
+        overall = sleep_scores.get("overall") or {}
+        if isinstance(overall, dict):
+            overall_score = safe_int(overall.get("value"))
+
+    conn.execute(
+        "DELETE FROM sleep_stage_segments WHERE sleep_date = ?",
+        (sleep_date,),
+    )
+    conn.executemany(
+        """
+        INSERT OR REPLACE INTO sleep_stage_segments (
+            sleep_date,
+            segment_index,
+            start_utc,
+            end_utc,
+            start_local,
+            end_local,
+            activity_level,
+            raw_file
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        list(segments),
+    )
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO daily_sleep_summary (
+            sleep_date,
+            sleep_start_local,
+            sleep_end_local,
+            total_sleep_seconds,
+            deep_sleep_seconds,
+            light_sleep_seconds,
+            rem_sleep_seconds,
+            awake_sleep_seconds,
+            average_sleep_stress,
+            average_sleep_heart_rate,
+            resting_heart_rate,
+            sleep_score,
+            raw_file,
+            fetched_at_utc
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            sleep_date,
+            sleep_start_local,
+            sleep_end_local,
+            safe_int(dto.get("sleepTimeSeconds")),
+            safe_int(dto.get("deepSleepSeconds")),
+            safe_int(dto.get("lightSleepSeconds")),
+            safe_int(dto.get("remSleepSeconds")),
+            safe_int(dto.get("awakeSleepSeconds")),
+            safe_float(dto.get("avgSleepStress")),
+            safe_float(dto.get("avgHeartRate")),
+            safe_int(payload.get("restingHeartRate")),
+            overall_score,
+            str(raw_path),
+            fetched_at_utc,
+        ),
+    )
+    conn.commit()
+
+
+def fetch_sleep_for_dates(
+    client: Garmin,
+    conn: sqlite3.Connection,
+    fetch_dates: Sequence[date],
+    tz: ZoneInfo,
+) -> None:
+    for fetch_date in fetch_dates:
+        date_text = fetch_date.isoformat()
+        print(f"[sleep] fetch {date_text}")
+        payload = client.get_sleep_data(date_text)
+        if not isinstance(payload, dict):
+            raise RuntimeError(f"Unexpected Garmin sleep payload for {date_text}: {type(payload)}")
+
+        raw_path = save_raw_json(payload, fetch_date, RAW_SLEEP_DIR)
+        segments = normalize_sleep_segments(payload.get("sleepLevels"), fetch_date, raw_path, tz)
+        upsert_sleep_day(conn, fetch_date, raw_path, payload, segments, tz)
+        dto = payload.get("dailySleepDTO") or {}
+        total_sleep_seconds = safe_int(dto.get("sleepTimeSeconds")) if isinstance(dto, dict) else None
+        sleep_scores = dto.get("sleepScores") if isinstance(dto, dict) else None
+        overall_score = None
+        if isinstance(sleep_scores, dict):
+            overall = sleep_scores.get("overall") or {}
+            if isinstance(overall, dict):
+                overall_score = safe_int(overall.get("value"))
+        print(
+            f"[sleep] saved {date_text} total_sleep_seconds={total_sleep_seconds} "
+            f"score={overall_score} segments={len(segments)}"
         )
 
 
@@ -587,6 +978,10 @@ def main() -> None:
 
     if not args.skip_wellness:
         fetch_wellness_for_dates(client, conn, fetch_dates, tz)
+    if not args.skip_stress:
+        fetch_stress_for_dates(client, conn, fetch_dates, tz)
+    if not args.skip_sleep:
+        fetch_sleep_for_dates(client, conn, fetch_dates, tz)
     if not args.skip_activities:
         fetch_activity_fit_data(client, conn, fetch_dates, tz)
 

@@ -18,6 +18,8 @@ Garmin Connect 앱의 심박수 데이터를 주기적으로 가져와서 로컬
 - `scripts/fetch_garmin_heart_rate.py`: Garmin Connect에서 날짜별 심박수 데이터를 가져와 raw JSON과 SQLite로 저장
 - `scripts/fetch_garmin_heart_rate_fine.py`: 웰니스 심박수와 활동 원본 FIT를 함께 가져와 가능한 가장 촘촘한 심박수 샘플까지 저장
 - `scripts/analyze_heart_rate.py`: 저장된 데이터를 CSV, 텍스트 요약, PNG 차트, Chart.js 대시보드로 분석하고 GitHub Pages용 `docs/` 정적 파일도 생성
+- `backend/`: 다중 계정 웹서비스로 확장하기 위한 FastAPI 백엔드 스캐폴드
+- `architecture/heart_rate_service_blueprint.md`: Garmin + 이벤트 기반 인사이트 서비스 설계 초안
 - `launchd/com.user.garmin-heart-rate-fetch.plist.example`: macOS `launchd` 주기 실행 예시
 - `.env.example`: 로컬 환경변수 예시
 
@@ -157,3 +159,14 @@ launchctl start com.user.garmin-heart-rate-fetch
 - Garmin 지원 문서 기준으로 Garmin Connect의 하루 심박수 값은 워치의 15초 평균과 달리 2분 평균으로 보일 수 있습니다.
 - 더 촘촘한 심박수는 하루 웰니스 그래프가 아니라 활동 원본 `FIT` 파일에서 가져오는 것이 핵심입니다. 활동 중에는 기기와 활동 종류에 따라 1초 수준 또는 그에 가까운 간격으로 기록될 수 있지만, 하루 전체 웰니스 데이터는 그 해상도로 노출되지 않습니다.
 - 이 프로젝트는 우선 심박수 중심으로 만들었지만, 같은 구조로 수면, 스트레스, HRV까지 쉽게 확장할 수 있습니다.
+
+## 서비스 확장 초안
+
+현재 저장소에는 이벤트 기반 인사이트 서비스로 확장하기 위한 초안도 함께 들어 있습니다.
+
+- 아키텍처 문서: `architecture/heart_rate_service_blueprint.md`
+- 백엔드 안내: `backend/README.md`
+- FastAPI 엔트리: `backend/app/main.py`
+- PostgreSQL 스키마 초안: `backend/sql/schema.sql`
+
+이 구조는 지금의 비공식 Garmin 로그인 방식과, 나중의 공식 OAuth/API 방식을 `GarminProvider` 계층 뒤에서 교체할 수 있게 설계했습니다.
