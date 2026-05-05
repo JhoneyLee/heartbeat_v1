@@ -6,6 +6,8 @@ Garmin Connect 앱의 심박수 데이터를 주기적으로 가져와서 로컬
 
 ## 바로 보기
 
+- GitHub Pages 배포용 엔트리: `docs/index.html`
+- GitHub Pages 예상 URL: `https://jhoneylee.github.io/heartbeat_v1/`
 - 메인 대시보드: `reports/heart_rate_dashboard.html`
 - 대시보드 데이터: `reports/dashboard_data/dashboard_data.js`
 - 활동별 고해상도 데이터: `reports/dashboard_data/activities/`
@@ -14,7 +16,7 @@ Garmin Connect 앱의 심박수 데이터를 주기적으로 가져와서 로컬
 
 - `scripts/fetch_garmin_heart_rate.py`: Garmin Connect에서 날짜별 심박수 데이터를 가져와 raw JSON과 SQLite로 저장
 - `scripts/fetch_garmin_heart_rate_fine.py`: 웰니스 심박수와 활동 원본 FIT를 함께 가져와 가능한 가장 촘촘한 심박수 샘플까지 저장
-- `scripts/analyze_heart_rate.py`: 저장된 데이터를 CSV, 텍스트 요약, PNG 차트, Chart.js 대시보드로 분석
+- `scripts/analyze_heart_rate.py`: 저장된 데이터를 CSV, 텍스트 요약, PNG 차트, Chart.js 대시보드로 분석하고 GitHub Pages용 `docs/` 정적 파일도 생성
 - `launchd/com.user.garmin-heart-rate-fetch.plist.example`: macOS `launchd` 주기 실행 예시
 - `.env.example`: 로컬 환경변수 예시
 
@@ -87,6 +89,9 @@ open reports/heart_rate_dashboard.html
 
 생성 결과:
 
+- `docs/index.html`
+- `docs/dashboard_data/dashboard_data.js`
+- `docs/dashboard_data/activities/`
 - `reports/heart_rate_dashboard.html`
 - `reports/dashboard_data/dashboard_data.js`
 - `reports/dashboard_data/activities/`
@@ -105,7 +110,27 @@ open reports/heart_rate_dashboard.html
 - 활동별 고해상도 심박수 차트와 스파이크 표시
 - `running` 활동 고해상도 심박수의 날짜별 대표 평균/최대 추세
 
-## 4. macOS에서 주기 실행
+## 4. GitHub Pages 배포
+
+분석 스크립트를 실행하면 `docs/` 아래에 GitHub Pages용 정적 파일이 함께 생성됩니다.
+
+```bash
+source .venv/bin/activate
+python scripts/analyze_heart_rate.py
+```
+
+처음 한 번만 GitHub 저장소 설정에서 아래처럼 맞추면 됩니다.
+
+- `Settings > Pages`
+- `Build and deployment`: `Deploy from a branch`
+- Branch: `main`
+- Folder: `/docs`
+
+설정 후에는 `docs/index.html`이 Pages의 기본 엔트리가 되고, 대시보드는 보통 아래 URL에서 열립니다.
+
+- `https://jhoneylee.github.io/heartbeat_v1/`
+
+## 5. macOS에서 주기 실행
 
 예시 파일 `launchd/com.user.garmin-heart-rate-fetch.plist.example` 안의 `__PROJECT_ROOT__`를 실제 프로젝트 경로로 바꾸고, 계정 정보도 수정합니다.
 
